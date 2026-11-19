@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 
+from decouple import config
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,13 +21,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--n*oky^3!2cef$nav!u1$ck%)o+jz5_x*#6+cc8w$frx$jxhwg'
+# Loaded from .env (see .env.example). The old committed key is no longer used.
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 
 # Application definition
@@ -37,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'recognition',
 ]
 
 MIDDLEWARE = [
@@ -125,3 +132,21 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# MongoDB (Atlas) — stores face records. Django itself still uses SQLite above.
+MONGODB_URI = config('MONGODB_URI', default='')
+MONGODB_DB = config('MONGODB_DB', default='face_recognition')
+
+
+# Face recognition
+ML_MODELS_DIR = BASE_DIR / 'ml_models'
+FACE_DETECTOR = config('FACE_DETECTOR', default='yunet')
+FACE_YUNET_MODEL = ML_MODELS_DIR / 'face_detection_yunet_2023mar.onnx'
+FACE_HAAR_CASCADE = ML_MODELS_DIR / 'haarcascade_frontalface_default.xml'
+FACE_SFACE_MODEL = ML_MODELS_DIR / 'face_recognition_sface_2021dec.onnx'
+FACE_MATCH_THRESHOLD = config('FACE_MATCH_THRESHOLD', default=0.363, cast=float)
+FACE_UPLOAD_DIR = 'faces'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'

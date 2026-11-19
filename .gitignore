@@ -1,0 +1,38 @@
+# Python / virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+media/
+staticfiles/
+
+# Secrets (keep .env.example committed, never .env)
+.env
+.env.*
+!.env.example
+
+# Face data and downloaded model weights
+face_recognition_system/ml_models/*.onnx
+face_recognition_system/ml_models/*.xml
+haarcascade_*.xml
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
