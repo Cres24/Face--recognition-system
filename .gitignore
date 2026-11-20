@@ -25,11 +25,6 @@ staticfiles/
 .env.*
 !.env.example
 
-# Face data and downloaded model weights
-face_recognition_system/ml_models/*.onnx
-face_recognition_system/ml_models/*.xml
-haarcascade_*.xml
-
 # Editors / OS
 .idea/
 .vscode/

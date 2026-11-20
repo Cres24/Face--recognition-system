@@ -140,11 +140,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
-# MongoDB (Atlas) — stores face records. Django itself still uses SQLite above.
-MONGODB_URI = config('MONGODB_URI', default='')
-MONGODB_DB = config('MONGODB_DB', default='face_recognition')
-
-
 # Face recognition
 ML_MODELS_DIR = BASE_DIR / 'ml_models'
 FACE_DETECTOR = config('FACE_DETECTOR', default='yunet')
@@ -156,3 +151,8 @@ FACE_UPLOAD_DIR = 'faces'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+
+# MongoDB (Atlas) — Django itself still uses SQLite above.
+MONGODB_URI = config('MONGODB_URI', default='')
+MONGODB_DB = config('MONGODB_DB', default='face_recognition')
