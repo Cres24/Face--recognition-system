@@ -1,8 +1,8 @@
 # Face Recognition System
 
-A small Django app that detects and identifies faces using OpenCV's YuNet detector
-and SFace embeddings, with face records stored in MongoDB Atlas. Django's own
-SQLite database is still used for admin/auth/sessions.
+Baseline project setup: a Django skeleton, dependency/ignore configuration,
+MongoDB Atlas configuration, and a script that opens the webcam. Face
+detection/recognition is not implemented yet.
 
 ## Setup
 
@@ -13,66 +13,33 @@ pip install -r requirements.txt
 cp .env.example .env               # then edit .env
 ```
 
-Fill in `.env`:
+`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `MONGODB_URI`, and `MONGODB_DB` are read
+from `.env` via `python-decouple`. The `.env` file is gitignored.
 
-- `SECRET_KEY`: a long random string.
-- `MONGODB_URI`: your Atlas SRV connection string, with the **real URL-encoded
-  password** substituted. The database user needs read/write access to the
-  database you choose; the Atlas cluster's network access list must include
-  your current public IP.
-- `MONGODB_DB`: database to use (Atlas creates it on first write). Defaults to
-  `face_recognition`; this repo's `.env` uses the existing `faskflow` cluster.
-- `FACE_MATCH_THRESHOLD`: SFace cosine threshold, default `0.363`. Tune it with
-  your own photos (higher = stricter).
-- `FACE_DETECTOR`: `yunet` (default, provides landmarks for accurate alignment)
-  or `haar` (simpler, falls back to a resized crop).
+For MongoDB Atlas, use your cluster's SRV connection string with the real
+URL-encoded password (encode special characters such as `@`, `#`, `/`), and
+make sure your current IP is in the cluster's Network Access list. Atlas
+creates the database on first write.
 
-Download the model files into `face_recognition_system/ml_models/` (they are
-gitignored):
+## Verify Django
 
-```bash
-cd face_recognition_system/ml_models
-curl -fsSL -o haarcascade_frontalface_default.xml \
-  https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml
-curl -fsSL -o face_detection_yunet_2023mar.onnx \
-  https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
-curl -fsSL -o face_recognition_sface_2021dec.onnx \
-  https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
-```
-
-## Verify
-
-From the `face_recognition_system/` directory:
+From `face_recognition_system/`:
 
 ```bash
 python manage.py check
-python manage.py check_mongo       # pings Atlas and reports the `people` collection
+python manage.py runserver
 ```
 
-## Enrol and recognize
+Django itself still uses SQLite (`db.sqlite3`) for admin/auth/sessions.
+`db/mongo.py` holds the shared MongoDB client and `people` collection helper
+for when face storage is added later.
+
+## Webcam script
 
 ```bash
 cd face_recognition_system
-python scripts/enrol.py --name Alice --image /path/to/alice.jpg
-python scripts/recognize.py --image /path/to/test.jpg
-python scripts/recognize.py --webcam                 # press q to quit
+python scripts/recognize.py
 ```
 
-Enrolment stores a 128-D embedding, the cropped photo path, and a timestamp in
-the `people` collection (`name` has a unique index, so re-enrolling updates it).
-
-## HTTP API
-
-Run `python manage.py runserver`, then:
-
-```bash
-# Enrol
-curl -F name=Alice -F image=@/path/to/alice.jpg http://127.0.0.1:8000/api/faces/
-
-# Recognize (JSON: {"status": "ok", "faces": [{"name", "score", "box"}, ...]})
-curl -F image=@/path/to/test.jpg http://127.0.0.1:8000/api/recognize/
-```
-
-Uploaded images are served from `/media/` in development only. The two API views
-are CSRF-exempt for local development — add authentication and CSRF protection
-before exposing them publicly.
+This only opens the default webcam and displays the live feed; press `q` to
+quit. It uses OpenCV but does no detection or recognition yet.

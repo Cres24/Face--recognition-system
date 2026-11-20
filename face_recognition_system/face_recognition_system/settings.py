@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'recognition',
 ]
 
 MIDDLEWARE = [
@@ -134,19 +133,6 @@ MAILERS = {
 }
 
 
-# MongoDB (Atlas) — stores face records. Django itself still uses SQLite above.
+# MongoDB (Atlas) — Django itself still uses SQLite above.
 MONGODB_URI = config('MONGODB_URI', default='')
 MONGODB_DB = config('MONGODB_DB', default='face_recognition')
-
-
-# Face recognition
-ML_MODELS_DIR = BASE_DIR / 'ml_models'
-FACE_DETECTOR = config('FACE_DETECTOR', default='yunet')
-FACE_YUNET_MODEL = ML_MODELS_DIR / 'face_detection_yunet_2023mar.onnx'
-FACE_HAAR_CASCADE = ML_MODELS_DIR / 'haarcascade_frontalface_default.xml'
-FACE_SFACE_MODEL = ML_MODELS_DIR / 'face_recognition_sface_2021dec.onnx'
-FACE_MATCH_THRESHOLD = config('FACE_MATCH_THRESHOLD', default=0.363, cast=float)
-FACE_UPLOAD_DIR = 'faces'
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
