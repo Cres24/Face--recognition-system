@@ -12,7 +12,6 @@ export default function App() {
   const [previewUrl, setPreviewUrl] = useState(null);
 
   const [name, setName] = useState("");
-  const [personId, setPersonId] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("Camera ready.");
   const [statusType, setStatusType] = useState("neutral"); // "neutral" | "success" | "error"
@@ -73,7 +72,6 @@ export default function App() {
     faces.forEach((face) => {
       if (!face.box || face.box.length < 4) return;
       const [rawX, y, w, h] = face.box;
-      // Flip X coordinate when rendering over mirrored webcam preview
       const x = mirror ? sourceWidth - rawX - w : rawX;
 
       const color = face.recognized ? "#10b981" : "#ef4444";
@@ -194,9 +192,6 @@ export default function App() {
       const { blob, filename } = await getImagePayload();
       const formData = new FormData();
       formData.append("name", name.trim());
-      if (personId.trim()) {
-        formData.append("person_id", personId.trim());
-      }
       formData.append("image", blob, filename);
 
       const res = await fetch(`${API_BASE}/faces/`, {
@@ -212,7 +207,6 @@ export default function App() {
         setStatusType("success");
         setStatusMessage(`Enrolled '${data.name}' into MongoDB.`);
         setName("");
-        setPersonId("");
       }
     } catch (err) {
       setStatusType("error");
@@ -447,26 +441,12 @@ export default function App() {
         >
           <input
             type="text"
-            placeholder="Full Name (required)"
+            placeholder="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading}
             style={{
-              flex: "2 1 200px",
-              padding: "0.75rem",
-              fontSize: "0.95rem",
-              borderRadius: 8,
-              border: "1px solid #cbd5e1",
-            }}
-          />
-          <input
-            type="text"
-            placeholder="ID / USN (optional)"
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-            disabled={loading}
-            style={{
-              flex: "1 1 140px",
+              flex: "2 1 240px",
               padding: "0.75rem",
               fontSize: "0.95rem",
               borderRadius: 8,
@@ -477,7 +457,7 @@ export default function App() {
             type="submit"
             disabled={loading}
             style={{
-              flex: "1 1 120px",
+              flex: "1 1 130px",
               padding: "0.75rem 1.25rem",
               fontSize: "0.95rem",
               fontWeight: 600,
