@@ -1,7 +1,8 @@
 """Face detection and recognition built entirely on OpenCV models.
 
 Detection: YuNet (default) or Haar cascade.
-Embedding/matching: SFace (128-D features, cosine similarity).
+Alignment: the shared 112x112 ArcFace-style warp in ``shared.face_align``.
+Embedding/matching: selectable via ``FACE_EMBEDDING_BACKEND`` (SFace today).
 Face records live in MongoDB via ``db.mongo``.
 """
 
@@ -17,13 +18,11 @@ import numpy as np
 from django.conf import settings
 
 from db.mongo import get_people_collection
+from shared.face_align import align_face, detect, make_detector
+
+from .embeddings import get_embedder
 
 _detector = None
-_recognizer = None
-
-# Constant name changed across OpenCV releases; FR_COSINE == 0.
-_COSINE = getattr(cv2, "FaceRecognizerSF_FR_COSINE",
-                  getattr(cv2, "FaceRecognizerSF_COSINE", 0))
 
 
 @dataclass
@@ -50,12 +49,8 @@ def _get_detector():
         return _detector
 
     if _detector_kind() == "yunet":
-        model = Path(settings.FACE_YUNET_MODEL)
-        if not model.is_file():
-            raise FileNotFoundError(f"YuNet model not found: {model}")
-        _detector = cv2.FaceDetectorYN_create(
-            str(model), "", (320, 320),
-            score_threshold=0.9, nms_threshold=0.3, top_k=5000,
+        _detector = make_detector(
+            settings.FACE_YUNET_MODEL, score_threshold=settings.FACE_DETECTOR_SCORE
         )
     elif _detector_kind() == "haar":
         cascade = cv2.CascadeClassifier(str(settings.FACE_HAAR_CASCADE))
@@ -65,16 +60,6 @@ def _get_detector():
     else:
         raise ValueError("FACE_DETECTOR must be either 'yunet' or 'haar'")
     return _detector
-
-
-def _get_recognizer():
-    global _recognizer
-    if _recognizer is None:
-        model = Path(settings.FACE_SFACE_MODEL)
-        if not model.is_file():
-            raise FileNotFoundError(f"SFace model not found: {model}")
-        _recognizer = cv2.FaceRecognizerSF_create(str(model), "")
-    return _recognizer
 
 
 def decode_image(data: bytes) -> np.ndarray:
@@ -99,14 +84,9 @@ def detect_faces(image: np.ndarray) -> list[dict]:
     faces: list[dict] = []
 
     if _detector_kind() == "yunet":
-        height, width = image.shape[:2]
-        detector.setInputSize((width, height))
-        # OpenCV returns (retval, faces) where faces has shape (N, 15):
-        # bbox, 5 landmarks, and a score.
-        _, detections = detector.detect(image)
-        if detections is None:
-            return faces
-        for detection in np.asarray(detections):
+        # Each row is bbox, 5 landmarks and a score -- the landmark part is what
+        # shared.face_align.align_face() consumes.
+        for detection in detect(detector, image):
             x, y, w, h = (int(round(float(value))) for value in detection[:4])
             faces.append({
                 "box": (x, y, w, h),
@@ -125,17 +105,17 @@ def detect_faces(image: np.ndarray) -> list[dict]:
 
 
 def _embed(image: np.ndarray, face: dict) -> np.ndarray:
-    """Align a face and return its SFace feature as a (1, 128) float32 array."""
-    recognizer = _get_recognizer()
+    """Align a face with the shared warp and return a unit embedding vector."""
     if face["info"] is not None:
-        aligned = recognizer.alignCrop(image, face["info"])
+        aligned = align_face(image, face["info"])
     else:
+        # Haar has no landmarks; fall back to a plain bounding-box crop.
         x, y, w, h = face["box"]
         crop = image[max(0, y):y + h, max(0, x):x + w]
         if crop.size == 0:
             raise ValueError("Empty face crop")
         aligned = cv2.resize(crop, (112, 112), interpolation=cv2.INTER_AREA)
-    return np.asarray(recognizer.feature(aligned), dtype=np.float32).reshape(1, -1)
+    return get_embedder().embed(aligned)
 
 
 def enrol(name: str, image: np.ndarray) -> EnrolResult:
@@ -148,6 +128,7 @@ def enrol(name: str, image: np.ndarray) -> EnrolResult:
     if not faces:
         raise ValueError("No face detected in the supplied image")
     face = max(faces, key=lambda item: item["box"][2] * item["box"][3])
+    embedder = get_embedder()
     embedding = _embed(image, face)
 
     directory = Path(settings.MEDIA_ROOT) / settings.FACE_UPLOAD_DIR
@@ -161,13 +142,15 @@ def enrol(name: str, image: np.ndarray) -> EnrolResult:
         {"name": name},
         {"$set": {
             "name": name,
-            "embedding": embedding.flatten().tolist(),
+            "embedding": embedding.tolist(),
+            "model_id": embedder.model_id,
+            "embedding_size": embedder.embedding_size,
             "image_path": relative_path.as_posix(),
             "created_at": datetime.now(timezone.utc),
         }},
         upsert=True,
     )
-    return EnrolResult(name, relative_path.as_posix(), int(embedding.shape[1]))
+    return EnrolResult(name, relative_path.as_posix(), embedder.embedding_size)
 
 
 def recognize(image: np.ndarray) -> list[FaceMatch]:
@@ -176,13 +159,16 @@ def recognize(image: np.ndarray) -> list[FaceMatch]:
     if not faces:
         return []
 
+    embedder = get_embedder()
+    # Never compare vectors produced by different models (or different preprocessing).
     stored_people = list(
-        get_people_collection().find({}, {"name": 1, "embedding": 1})
+        get_people_collection().find(
+            {"model_id": embedder.model_id}, {"name": 1, "embedding": 1}
+        )
     )
     if not stored_people:
         return []
 
-    recognizer = _get_recognizer()
     threshold = settings.FACE_MATCH_THRESHOLD
     matches: list[FaceMatch] = []
 
@@ -191,10 +177,10 @@ def recognize(image: np.ndarray) -> list[FaceMatch]:
         best_name = "Unknown"
         best_score = -1.0
         for person in stored_people:
-            known = np.asarray(person.get("embedding", []), dtype=np.float32).reshape(1, -1)
-            if known.size == 0 or known.shape != embedding.shape:
+            known = np.asarray(person.get("embedding", []), dtype=np.float32)
+            if known.shape != embedding.shape:
                 continue
-            score = float(recognizer.match(embedding, known, _COSINE))
+            score = embedder.similarity(embedding, known)
             if score > best_score:
                 best_score, best_name = score, person["name"]
 

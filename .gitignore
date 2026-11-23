@@ -19,6 +19,8 @@ db.sqlite3-journal
 local_settings.py
 media/
 staticfiles/
+# Downloaded ONNX models (installed by scripts/download_models.py)
+ml_models/
 
 # Secrets (keep .env.example committed, never .env)
 .env
