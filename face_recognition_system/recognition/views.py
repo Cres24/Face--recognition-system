@@ -44,6 +44,9 @@ def recognize_face(request):
             {"status": "unknown", "message": "Cannot recognize", "faces": []},
             status=200,
         )
+    except OSError as exc:
+        # Missing ONNX models / unwritable files should be visible, not a generic 500.
+        return JsonResponse({"error": str(exc)}, status=503)
     except (ImproperlyConfigured, PyMongoError) as exc:
         return JsonResponse({"error": f"Database error: {exc}"}, status=503)
 

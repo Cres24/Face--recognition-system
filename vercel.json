@@ -3,7 +3,8 @@
   "services": {
     "backend": {
       "root": "face_recognition_system",
-      "framework": "django"
+      "framework": "django",
+      "buildCommand": "python scripts/download_models.py"
     },
     "frontend": {
       "root": "frontend",

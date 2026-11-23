@@ -26,6 +26,13 @@ The download script installs the pinned models into `face_recognition_system/ml_
 so the script uses the `media.githubusercontent.com` endpoints. Licences: YuNet (MIT),
 SFace (Apache-2.0), Haar cascade (Apache-2.0). Re-run with `--force` to replace a bad copy.
 
+For Vercel, the Django backend service declares
+`"buildCommand": "python scripts/download_models.py"` in the root `vercel.json`.
+A self-contained copy of the downloader lives at
+`face_recognition_system/scripts/download_models.py` so the models are fetched during
+the backend build even when Vercel builds only that service root. They are gitignored,
+so they must not be committed.
+
 ## Verify
 
 ```bash
