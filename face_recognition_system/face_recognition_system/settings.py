@@ -25,21 +25,25 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
-
 # Loaded from .env (see .env.example). The old committed key is no longer used.
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
-    if host.strip()
-]
+from decouple import Csv, config
 
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="127.0.0.1,localhost,.vercel.app",
+    cast=Csv(),
+)
+
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="http://localhost:5173,http://127.0.0.1:5173,https://*.vercel.app",
+    cast=Csv(),
+)
 
 # Application definition
 
