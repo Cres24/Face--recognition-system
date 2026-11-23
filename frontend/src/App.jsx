@@ -10,11 +10,9 @@ export default function App() {
   const [mode, setMode] = useState("webcam"); // "webcam" | "upload"
   const [uploadedFile, setUploadedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-
   const [name, setName] = useState("");
-  const [personId, setPersonId] = useState("");
 
-  const [statusMessage, setStatusMessage] = useState("Camera ready.");
+  const [statusMessage, setStatusMessage] = useState("Camera ready for scanning or enrollment.");
   const [statusType, setStatusType] = useState("neutral"); // "neutral" | "success" | "error"
   const [detectedFaces, setDetectedFaces] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +34,7 @@ export default function App() {
           videoRef.current.srcObject = stream;
         }
         setStatusType("neutral");
-        setStatusMessage("Camera ready.");
+        setStatusMessage("Camera ready for scanning or enrollment.");
       } catch (err) {
         setStatusType("error");
         setStatusMessage("Unable to access webcam: " + err.message);
@@ -52,7 +50,6 @@ export default function App() {
     };
   }, [mode]);
 
-  // Clear bounding box overlay when switching modes or images
   const clearOverlay = () => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
@@ -60,7 +57,6 @@ export default function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  // Draw bounding boxes from backend `faces` array onto the overlay canvas
   const drawBoundingBoxes = (faces, sourceWidth, sourceHeight, mirror = false) => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
@@ -73,7 +69,6 @@ export default function App() {
     faces.forEach((face) => {
       if (!face.box || face.box.length < 4) return;
       const [rawX, y, w, h] = face.box;
-      // Flip X coordinate when rendering over mirrored webcam preview
       const x = mirror ? sourceWidth - rawX - w : rawX;
 
       const color = face.recognized ? "#10b981" : "#ef4444";
@@ -85,19 +80,18 @@ export default function App() {
       ctx.lineWidth = 3;
       ctx.strokeRect(x, y, w, h);
 
-      ctx.font = "bold 15px system-ui, sans-serif";
+      ctx.font = "600 15px Inter, system-ui, sans-serif";
       const textWidth = ctx.measureText(label).width;
-      const labelY = y > 26 ? y - 26 : y + h;
+      const labelY = y > 28 ? y - 28 : y + h;
 
       ctx.fillStyle = color;
-      ctx.fillRect(x, labelY, textWidth + 14, 26);
+      ctx.fillRect(x, labelY, textWidth + 16, 28);
 
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, x + 7, labelY + 18);
+      ctx.fillText(label, x + 8, labelY + 19);
     });
   };
 
-  // Handle switching between Webcam and Image Upload
   const handleModeSwitch = (nextMode) => {
     setMode(nextMode);
     setDetectedFaces([]);
@@ -107,7 +101,7 @@ export default function App() {
       setPreviewUrl(null);
     } else {
       setStatusType("neutral");
-      setStatusMessage("Select an image file to enroll or recognize.");
+      setStatusMessage("Select a JPG or PNG photo to scan or enroll.");
     }
   };
 
@@ -119,10 +113,9 @@ export default function App() {
     setDetectedFaces([]);
     clearOverlay();
     setStatusType("neutral");
-    setStatusMessage(`Loaded ${file.name}`);
+    setStatusMessage(`Loaded "${file.name}"`);
   };
 
-  // Obtain image Blob + natural dimensions from either webcam or uploaded file
   const getImagePayload = () =>
     new Promise((resolve, reject) => {
       if (mode === "upload") {
@@ -175,7 +168,6 @@ export default function App() {
       );
     });
 
-  // POST /api/faces/ -> Enroll face in MongoDB
   const handleEnroll = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -188,15 +180,12 @@ export default function App() {
     setDetectedFaces([]);
     clearOverlay();
     setStatusType("neutral");
-    setStatusMessage("Extracting embedding & saving to MongoDB...");
+    setStatusMessage("Extracting facial embedding & saving to MongoDB...");
 
     try {
       const { blob, filename } = await getImagePayload();
       const formData = new FormData();
       formData.append("name", name.trim());
-      if (personId.trim()) {
-        formData.append("person_id", personId.trim());
-      }
       formData.append("image", blob, filename);
 
       const res = await fetch(`${API_BASE}/faces/`, {
@@ -212,7 +201,6 @@ export default function App() {
         setStatusType("success");
         setStatusMessage(`Enrolled '${data.name}' into MongoDB.`);
         setName("");
-        setPersonId("");
       }
     } catch (err) {
       setStatusType("error");
@@ -222,7 +210,6 @@ export default function App() {
     }
   };
 
-  // POST /api/recognize/ -> Match against MongoDB or show "Cannot recognize"
   const handleRecognize = async () => {
     setLoading(true);
     setDetectedFaces([]);
@@ -266,231 +253,353 @@ export default function App() {
     }
   };
 
-  const bannerStyles = {
-    neutral: { background: "#1e293b", color: "#e2e8f0", border: "#334155" },
-    success: { background: "#064e3b", color: "#a7f3d0", border: "#059669" },
-    error: { background: "#7f1d1d", color: "#fecaca", border: "#dc2626" },
-  };
+  const bannerTheme = {
+    neutral: {
+      bg: "rgba(30, 41, 59, 0.8)",
+      border: "#334155",
+      text: "#cbd5e1",
+      dot: "#64748b",
+    },
+    success: {
+      bg: "rgba(6, 78, 59, 0.55)",
+      border: "#10b981",
+      text: "#a7f3d0",
+      dot: "#10b981",
+    },
+    error: {
+      bg: "rgba(127, 29, 29, 0.55)",
+      border: "#ef4444",
+      text: "#fecaca",
+      dot: "#ef4444",
+    },
+  }[statusType];
 
   return (
-    <div style={{ maxWidth: 740, margin: "1.5rem auto", fontFamily: "system-ui, sans-serif", padding: "0 1rem" }}>
-      <h1 style={{ textAlign: "center", marginBottom: "0.75rem" }}>Face Recognition System</h1>
-
-      {/* Mode Switcher: Live Webcam vs Image File */}
-      <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-        <button
-          type="button"
-          onClick={() => handleModeSwitch("webcam")}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: 8,
-            border: "1px solid #334155",
-            background: mode === "webcam" ? "#2563eb" : "#1e293b",
-            color: "#fff",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Live Webcam
-        </button>
-        <button
-          type="button"
-          onClick={() => handleModeSwitch("upload")}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: 8,
-            border: "1px solid #334155",
-            background: mode === "upload" ? "#2563eb" : "#1e293b",
-            color: "#fff",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Upload Photo
-        </button>
-      </div>
-
-      {/* Viewport with Bounding Box Canvas Overlay */}
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: "2.5rem 1rem",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+      }}
+    >
       <div
         style={{
-          position: "relative",
-          borderRadius: 12,
-          overflow: "hidden",
-          background: "#0f172a",
-          minHeight: 320,
+          width: "100%",
+          maxWidth: 780,
+          background: "rgba(15, 23, 42, 0.85)",
+          backdropFilter: "blur(14px)",
+          border: "1px solid rgba(148, 163, 184, 0.15)",
+          borderRadius: 20,
+          padding: "2rem",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.6)",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          flexDirection: "column",
+          gap: "1.5rem",
         }}
       >
-        {mode === "webcam" ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={{ width: "100%", display: "block", transform: "scaleX(-1)" }}
-          />
-        ) : previewUrl ? (
-          <img
-            src={previewUrl}
-            alt="Uploaded preview"
-            style={{ width: "100%", display: "block", objectFit: "contain" }}
-          />
-        ) : (
-          <label
+        {/* Header Section — Clear vertical separation from controls */}
+        <header style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+          <span
             style={{
-              padding: "2rem",
-              color: "#94a3b8",
-              cursor: "pointer",
-              textAlign: "center",
-              width: "100%",
+              alignSelf: "center",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#60a5fa",
+              background: "rgba(37, 99, 235, 0.15)",
+              border: "1px solid rgba(96, 165, 250, 0.3)",
+              padding: "0.25rem 0.75rem",
+              borderRadius: 999,
             }}
           >
-            Click to select a JPG/PNG photo
-            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
-          </label>
-        )}
+            AI Identity Verification
+          </span>
+          <h1
+            style={{
+              fontSize: "1.9rem",
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              color: "#f8fafc",
+              lineHeight: 1.2,
+              marginTop: "0.25rem",
+            }}
+          >
+            Face Recognition System
+          </h1>
+          <p style={{ fontSize: "0.95rem", color: "#94a3b8" }}>
+            Enroll faces into MongoDB or scan live to verify identity
+          </p>
+        </header>
 
-        <canvas
-          ref={overlayCanvasRef}
+        {/* Segmented Control Switcher */}
+        <div
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "0.5rem",
+            background: "#0b1120",
+            padding: "0.35rem",
+            borderRadius: 12,
+            border: "1px solid #1e293b",
           }}
-        />
-        <canvas ref={captureCanvasRef} style={{ display: "none" }} />
-      </div>
-
-      {mode === "upload" && previewUrl && (
-        <div style={{ marginTop: "0.5rem", textAlign: "right" }}>
-          <label style={{ fontSize: "0.9rem", color: "#2563eb", cursor: "pointer", fontWeight: 600 }}>
-            Change Photo
-            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
-          </label>
+        >
+          <button
+            type="button"
+            onClick={() => handleModeSwitch("webcam")}
+            style={{
+              padding: "0.65rem 1rem",
+              borderRadius: 9,
+              border: "none",
+              background: mode === "webcam" ? "#2563eb" : "transparent",
+              color: mode === "webcam" ? "#ffffff" : "#94a3b8",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Live Webcam
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeSwitch("upload")}
+            style={{
+              padding: "0.65rem 1rem",
+              borderRadius: 9,
+              border: "none",
+              background: mode === "upload" ? "#2563eb" : "transparent",
+              color: mode === "upload" ? "#ffffff" : "#94a3b8",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Upload Photo
+          </button>
         </div>
-      )}
 
-      {/* Status Banner */}
-      <div
-        style={{
-          marginTop: "1rem",
-          padding: "0.9rem 1rem",
-          borderRadius: 8,
-          border: `1px solid ${bannerStyles[statusType].border}`,
-          background: bannerStyles[statusType].background,
-          color: bannerStyles[statusType].color,
-          fontWeight: 600,
-          textAlign: "center",
-        }}
-      >
-        {statusMessage}
-      </div>
-
-      {/* Per-Face Breakdown */}
-      {detectedFaces.length > 0 && (
-        <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.75rem" }}>
-          {detectedFaces.map((face, idx) => (
-            <div
-              key={idx}
+        {/* Camera / Image Viewport */}
+        <div
+          style={{
+            position: "relative",
+            borderRadius: 14,
+            overflow: "hidden",
+            background: "#020617",
+            border: "1px solid #1e293b",
+            aspectRatio: "4 / 3",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {mode === "webcam" ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
+            />
+          ) : previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Uploaded preview"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          ) : (
+            <label
               style={{
+                width: "100%",
+                height: "100%",
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: "column",
                 alignItems: "center",
-                padding: "0.65rem 1rem",
-                borderRadius: 8,
-                background: "#1e293b",
-                color: "#f8fafc",
-                borderLeft: `4px solid ${face.recognized ? "#10b981" : "#ef4444"}`,
+                justifyContent: "center",
+                gap: "0.5rem",
+                color: "#94a3b8",
+                cursor: "pointer",
+                padding: "2rem",
+                textAlign: "center",
               }}
             >
-              <span style={{ fontWeight: 600 }}>
-                {face.recognized ? face.name : "Cannot recognize"}
+              <span style={{ fontSize: "1.05rem", fontWeight: 600, color: "#e2e8f0" }}>
+                Click to select a photo
               </span>
-              {typeof face.score === "number" && (
-                <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
-                  Distance/Score: {face.score.toFixed(3)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                Supports JPG, PNG, or WEBP
+              </span>
+              <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
+            </label>
+          )}
 
-      {/* Actions: Recognize Button & Enrollment Form */}
-      <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
-        <button
-          type="button"
-          onClick={handleRecognize}
-          disabled={loading}
+          <canvas
+            ref={overlayCanvasRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+            }}
+          />
+          <canvas ref={captureCanvasRef} style={{ display: "none" }} />
+        </div>
+
+        {mode === "upload" && previewUrl && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-0.75rem" }}>
+            <label
+              style={{
+                fontSize: "0.85rem",
+                color: "#60a5fa",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Choose a different photo
+              <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
+            </label>
+          </div>
+        )}
+
+        {/* Status Indicator Banner */}
+        <div
           style={{
-            width: "100%",
-            padding: "0.8rem 1.25rem",
-            fontSize: "1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.6rem",
+            padding: "0.9rem 1.25rem",
+            borderRadius: 12,
+            border: `1px solid ${bannerTheme.border}`,
+            background: bannerTheme.bg,
+            color: bannerTheme.text,
             fontWeight: 600,
-            borderRadius: 8,
-            border: "none",
-            background: "#2563eb",
-            color: "#fff",
-            cursor: loading ? "not-allowed" : "pointer",
+            fontSize: "0.95rem",
           }}
         >
-          {loading ? "Processing..." : "Recognize Face"}
-        </button>
+          <span
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: "50%",
+              background: bannerTheme.dot,
+              flexShrink: 0,
+            }}
+          />
+          <span>{statusMessage}</span>
+        </div>
 
-        <form
-          onSubmit={handleEnroll}
-          style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+        {/* Detected Faces List */}
+        {detectedFaces.length > 0 && (
+          <div style={{ display: "grid", gap: "0.6rem" }}>
+            {detectedFaces.map((face, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "0.75rem 1rem",
+                  borderRadius: 10,
+                  background: "#0b1120",
+                  border: "1px solid #1e293b",
+                  borderLeft: `4px solid ${face.recognized ? "#10b981" : "#ef4444"}`,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: face.recognized ? "#34d399" : "#f87171" }}>
+                  {face.recognized ? face.name : "Cannot recognize"}
+                </span>
+                {typeof face.score === "number" && (
+                  <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+                    Score: {face.score.toFixed(3)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Controls Section: Primary Recognize Action + Enrollment Card */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            paddingTop: "0.5rem",
+            borderTop: "1px solid #1e293b",
+          }}
         >
-          <input
-            type="text"
-            placeholder="Full Name (required)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={loading}
-            style={{
-              flex: "2 1 200px",
-              padding: "0.75rem",
-              fontSize: "0.95rem",
-              borderRadius: 8,
-              border: "1px solid #cbd5e1",
-            }}
-          />
-          <input
-            type="text"
-            placeholder="ID / USN (optional)"
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-            disabled={loading}
-            style={{
-              flex: "1 1 140px",
-              padding: "0.75rem",
-              fontSize: "0.95rem",
-              borderRadius: 8,
-              border: "1px solid #cbd5e1",
-            }}
-          />
           <button
-            type="submit"
+            type="button"
+            onClick={handleRecognize}
             disabled={loading}
             style={{
-              flex: "1 1 120px",
-              padding: "0.75rem 1.25rem",
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              borderRadius: 8,
+              width: "100%",
+              padding: "0.9rem 1.5rem",
+              fontSize: "1rem",
+              fontWeight: 700,
+              borderRadius: 12,
               border: "none",
-              background: "#10b981",
-              color: "#fff",
+              background: loading ? "#1d4ed8" : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+              color: "#ffffff",
               cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 10px 20px -6px rgba(37, 99, 235, 0.5)",
+              opacity: loading ? 0.75 : 1,
             }}
           >
-            Enroll to DB
+            {loading ? "Processing..." : "Recognize Face"}
           </button>
-        </form>
+
+          <form
+            onSubmit={handleEnroll}
+            style={{
+              display: "flex",
+              gap: "0.65rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Enter person's full name to enroll..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={loading}
+              style={{
+                flex: "1 1 260px",
+                padding: "0.85rem 1rem",
+                fontSize: "0.95rem",
+                borderRadius: 12,
+                border: "1px solid #334155",
+                background: "#0b1120",
+                color: "#f8fafc",
+                outline: "none",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: "0 0 auto",
+                padding: "0.85rem 1.5rem",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                borderRadius: 12,
+                border: "none",
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "#ffffff",
+                cursor: loading ? "not-allowed" : "pointer",
+                boxShadow: "0 10px 20px -6px rgba(16, 185, 129, 0.4)",
+                opacity: loading ? 0.75 : 1,
+              }}
+            >
+              Enroll to Database
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
