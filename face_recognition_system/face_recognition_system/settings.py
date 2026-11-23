@@ -10,12 +10,19 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# The repo-root ``shared/`` package holds alignment code used by the app and by
+# offline training/data-prep scripts. Django's manage.py only puts BASE_DIR on sys.path.
+REPO_ROOT = BASE_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 # Quick-start development settings - unsuitable for production
@@ -50,7 +57,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -143,6 +149,9 @@ CORS_ALLOWED_ORIGINS = [
 # Face recognition
 ML_MODELS_DIR = BASE_DIR / 'ml_models'
 FACE_DETECTOR = config('FACE_DETECTOR', default='yunet')
+# Keep this identical in training-data alignment and at inference.
+FACE_DETECTOR_SCORE = config('FACE_DETECTOR_SCORE', default=0.9, cast=float)
+FACE_EMBEDDING_BACKEND = config('FACE_EMBEDDING_BACKEND', default='sface')
 FACE_YUNET_MODEL = ML_MODELS_DIR / 'face_detection_yunet_2023mar.onnx'
 FACE_HAAR_CASCADE = ML_MODELS_DIR / 'haarcascade_frontalface_default.xml'
 FACE_SFACE_MODEL = ML_MODELS_DIR / 'face_recognition_sface_2021dec.onnx'
